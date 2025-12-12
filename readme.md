@@ -92,3 +92,7 @@ Sebelum menjalankan, pastikan Anda memiliki:
     npm run dev
     (Akses aplikasi di http://localhost:5173)
 
+
+## 📸 Screenshots
+![img](<Screenshot 2025-12-13 000945.png>)
+![img](<Screenshot 2025-12-13 001619.png>)
