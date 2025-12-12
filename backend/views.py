@@ -4,6 +4,7 @@ import requests
 import google.generativeai as genai
 import json
 import os
+import re 
 from models import Review
 from sqlalchemy.exc import DBAPIError
 
@@ -14,45 +15,105 @@ def analyze_review(request):
         product_name = data.get('product_name')
         review_text = data.get('review_text')
 
+        print(f"\n🚀 Memulai Analisis untuk: {product_name}")
+
         existing_review = request.dbsession.query(Review).filter_by(review_text=review_text).first()
         if existing_review:
-             print("⚡ Mengambil data dari cache database...")
-             return {
-                'id': existing_review.id,
-                'product_name': existing_review.product_name,
-                'sentiment': existing_review.sentiment,
-                'confidence': existing_review.confidence,
-                'key_points': json.loads(existing_review.key_points), 
-                'status': 'cached'
-            }
+            try:
+                prev_result = json.loads(existing_review.key_points)
+                if isinstance(prev_result, list) and len(prev_result) > 0 and "Gagal" not in prev_result[0]:
+                    print("⚡ Mengambil data sukses dari cache database...")
+                    return {
+                        'id': existing_review.id,
+                        'product_name': existing_review.product_name,
+                        'sentiment': existing_review.sentiment,
+                        'confidence': existing_review.confidence,
+                        'key_points': prev_result, 
+                        'status': 'cached'
+                    }
+                else:
+                    print("♻️ Cache ditemukan tapi isinya GAGAL. Melakukan analisis ulang...")
+            except:
+                print("♻️ Cache rusak. Melakukan analisis ulang...")
 
-        print("🤖 Meminta analisis ke AI...")
+        print("🤖 Menghubungi Gemini AI...")
+        genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
+
+        model = genai.GenerativeModel('gemini-1.5-flash') 
         
-        sentiment_result = call_huggingface_sentiment(review_text)
-        key_points_list = extract_key_points_gemini(review_text)
+        prompt = f"""
+        Analyze this product review and extract 3-5 key points.
+        Output MUST be a raw JSON list of strings. 
+        Example: ["Battery drains fast", "Screen is bright", "Good value"]
+        Do not output markdown code blocks. Just the list.
+        Review: {review_text}
+        """
+        
+        key_points_list = []
+        try:
+            response = model.generate_content(prompt)
+            raw_text = response.text.strip()
+            
+            if "```" in raw_text:
+                raw_text = raw_text.split("```")[1]
+                if raw_text.startswith("json"):
+                    raw_text = raw_text[4:]
+            
+            key_points_list = json.loads(raw_text.strip())
+            
+        except Exception as e:
+            print(f"⚠️ JSON Parsing Gagal ({e}). Mencoba fallback manual...")
+            if 'response' in locals() and response.text:
+                lines = response.text.split('\n')
+                key_points_list = [line.strip('- *1234567890.') for line in lines if len(line) > 5]
+            
+            if not key_points_list:
+                key_points_list = ["Analisis poin penting terkendala (Coba lagi nanti)"]
+
+        print("🤖 Menghubungi Hugging Face...")
+        hf_token = os.getenv('HUGGINGFACE_API_KEY')
+        hf_headers = {"Authorization": f"Bearer {hf_token}"}
+        hf_url = "https://api-inference.huggingface.co/models/cardiffnlp/twitter-roberta-base-sentiment-latest"
+        
+        sentiment_label = "neutral"
+        sentiment_score = 0.0
+        
+        try:
+            hf_res = requests.post(hf_url, headers=hf_headers, json={"inputs": review_text})
+            if hf_res.status_code == 200:
+                hf_data = hf_res.json()
+                if isinstance(hf_data, list) and len(hf_data) > 0:
+                    top = max(hf_data[0], key=lambda x: x['score'])
+                    sentiment_label = top['label']
+                    sentiment_score = top['score']
+        except Exception as hf_e:
+            print(f"⚠️ Hugging Face Error: {hf_e}")
+
+        if not isinstance(key_points_list, list):
+            key_points_list = ["Gagal format data"]
 
         review = Review(
             product_name=product_name,
             review_text=review_text,
-            sentiment=sentiment_result['label'],
-            confidence=sentiment_result['score'],
-            key_points=json.dumps(key_points_list) 
+            sentiment=sentiment_label,
+            confidence=sentiment_score,
+            key_points=json.dumps(key_points_list)
         )
         request.dbsession.add(review)
-        request.dbsession.flush() 
+        request.dbsession.flush()
 
+        print("✅ Analisis Sukses!")
         return {
             'id': review.id,
             'product_name': product_name,
-            'sentiment': sentiment_result['label'],
-            'confidence': sentiment_result['score'],
+            'sentiment': sentiment_label,
+            'confidence': sentiment_score,
             'key_points': key_points_list
         }
 
     except Exception as e:
-        print(f"Error: {e}")
-        request.response.status = 500
-        return {'error': str(e)}
+        print(f"❌ ERROR FATAL: {e}")
+        return {'error': str(e)}, 500
 
 @view_config(route_name='get_reviews', request_method='GET', renderer='json')
 def get_reviews(request):
@@ -60,46 +121,18 @@ def get_reviews(request):
         reviews = request.dbsession.query(Review).order_by(Review.created_at.desc()).all()
         result = []
         for r in reviews:
+            try:
+                kp = json.loads(r.key_points) if r.key_points else []
+            except:
+                kp = ["Data error"]
+            
             result.append({
                 'id': r.id,
                 'product_name': r.product_name,
-                'review_text': r.review_text,
                 'sentiment': r.sentiment,
                 'confidence': r.confidence,
-                'key_points': json.loads(r.key_points) if r.key_points else [],
-                'created_at': str(r.created_at)
+                'key_points': kp
             })
         return result
     except DBAPIError:
-        return Response("Database error", status=500)
-
-
-def call_huggingface_sentiment(text):
-    API_URL = "https://api-inference.huggingface.co/models/cardiffnlp/twitter-roberta-base-sentiment-latest"
-    HEADERS = {"Authorization": f"Bearer {os.getenv('HUGGINGFACE_API_KEY')}"}
-    
-    try:
-        response = requests.post(API_URL, headers=HEADERS, json={"inputs": text})
-        result = response.json()
-        
-        if isinstance(result, list) and len(result) > 0:
-            top_sentiment = max(result[0], key=lambda x: x['score'])
-            return top_sentiment
-    except Exception as e:
-        print(f"HF Error: {e}")
-    
-    return {"label": "neutral", "score": 0.0}
-
-def extract_key_points_gemini(text):
-    genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
-    model = genai.GenerativeModel('gemini-pro')
-    
-    prompt = f"Extract 3-5 key points from this product review. Return ONLY a JSON list of strings, for example: [\"point 1\", \"point 2\"]. Do not use markdown code blocks. Review: {text}"
-    
-    try:
-        response = model.generate_content(prompt)
-        clean_text = response.text.replace('```json', '').replace('```', '').strip()
-        return json.loads(clean_text)
-    except Exception as e:
-        print(f"Gemini Error: {e}")
-        return ["Gagal mengekstrak poin penting"]
+        return Response("DB Error", status=500)

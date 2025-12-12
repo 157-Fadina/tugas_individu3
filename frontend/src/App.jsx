@@ -15,6 +15,7 @@ function App() {
 
   const fetchHistory = async () => {
     try {
+      // Pastikan backend berjalan di port 6543
       const res = await axios.get('http://localhost:6543/api/reviews')
       setHistory(res.data)
     } catch (err) {
@@ -24,7 +25,7 @@ function App() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    if (!productName || !reviewText) return alert("Isi semua data!")
+    if (!productName || !reviewText) return alert("Isi semua data dulu ya!")
 
     setLoading(true)
     setResult(null)
@@ -35,92 +36,122 @@ function App() {
         review_text: reviewText
       })
       setResult(res.data)
-      fetchHistory() 
+      fetchHistory()
     } catch (err) {
-      alert("Gagal menganalisis. Cek backend!")
+      alert("Gagal koneksi ke Backend. Cek terminal backend!")
       console.error(err)
     } finally {
       setLoading(false)
     }
   }
 
+  const getSentimentClass = (sentiment) => {
+    if (!sentiment) return 'sentiment-neutral';
+    const s = sentiment.toLowerCase();
+    if (s.includes('positive')) return 'sentiment-positive';
+    if (s.includes('negative')) return 'sentiment-negative';
+    return 'sentiment-neutral';
+  }
+
   return (
-    <div style={{ maxWidth: '800px', margin: '0 auto', padding: '20px' }}>
-      <h1>Product Review Analyzer</h1>
+    <div className="container">
+      {/* HEADER */}
+      <div className="header">
+        <h1>✨ AI Product Analyzer</h1>
+        <p className="subtitle">Review Analyzer Powered by Hugging Face & Gemini</p>
+      </div>
       
-      {/* --- FORM INPUT --- */}
-      <div style={{ marginBottom: '30px', border: '1px solid #ccc', padding: '20px', borderRadius: '8px' }}>
-        <h3>Analisis Review Baru</h3>
+      {/* GLASS CARD (FORM) */}
+      <div className="glass-card">
         <form onSubmit={handleSubmit}>
-          <div style={{ marginBottom: '10px' }}>
-            <label>Nama Produk:</label><br/>
+          <div className="input-group">
+            <label>📦 Nama Produk</label>
             <input 
               type="text" 
               value={productName}
               onChange={(e) => setProductName(e.target.value)}
-              style={{ width: '100%', padding: '8px' }}
-              placeholder="Contoh: Laptop Gaming X"
+              placeholder="Contoh: Laptop Gaming ROG..."
             />
           </div>
-          <div style={{ marginBottom: '10px' }}>
-            <label>Isi Review:</label><br/>
+          
+          <div className="input-group">
+            <label>💬 Ulasan Pembeli</label>
             <textarea 
               value={reviewText}
               onChange={(e) => setReviewText(e.target.value)}
-              style={{ width: '100%', height: '100px', padding: '8px' }}
-              placeholder="Ketik ulasan di sini..."
+              placeholder="Paste ulasan di sini..."
             />
           </div>
-          <button type="submit" disabled={loading} style={{ padding: '10px 20px', cursor: 'pointer' }}>
-            {loading ? 'Sedang Menganalisis...' : 'Analyze Review'}
+
+          <button type="submit" className="btn-analyze" disabled={loading}>
+            {loading ? 'Sedang Menganalisis... 🔮' : 'Analisis Sekarang 🚀'}
           </button>
         </form>
+
+        {/* RESULT AREA */}
+        {result && (
+          <div className="result-box">
+            <div className="result-header">
+              <h3>🎯 Hasil Analisis</h3>
+              <span className={`sentiment-badge ${getSentimentClass(result.sentiment)}`}>
+                {result.sentiment}
+              </span>
+            </div>
+            
+            <p style={{marginBottom: '10px'}}>
+              <strong>Tingkat Keyakinan AI:</strong> {(result.confidence * 100).toFixed(1)}%
+            </p>
+
+            <div className="key-points">
+              <strong>💡 Poin-Poin Penting:</strong>
+              <ul style={{marginTop: '5px'}}>
+                {result.key_points && Array.isArray(result.key_points) && result.key_points.length > 0 ? (
+                  result.key_points.map((point, idx) => (
+                    <li key={idx}>{point}</li>
+                    ))
+                  ) : (
+                    <li style={{color: 'yellow'}}>⚠️ Data poin penting tidak ditemukan/gagal diekstrak.</li>
+                  )}
+              </ul>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* --- HASIL ANALISIS --- */}
-      {result && (
-        <div style={{ marginBottom: '30px', backgroundColor: '#e6fffa', padding: '20px', borderRadius: '8px', border: '1px solid #4fd1c5' }}>
-          <h2>Hasil Analisis:</h2>
-          <p><strong>Sentimen:</strong> {result.sentiment} (Confidence: {result.confidence.toFixed(2)})</p>
-          <div>
-            <strong>Poin Penting (by Gemini):</strong>
-            <ul>
-              {result.key_points.map((point, idx) => (
-                <li key={idx}>{point}</li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      )}
-
-      {/* --- HISTORY --- */}
-      <hr />
-      <h3>Riwayat Analisis</h3>
-      {history.length === 0 ? <p>Belum ada data.</p> : (
-        <table border="1" cellPadding="10" style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr>
-              <th>Produk</th>
-              <th>Sentimen</th>
-              <th>Key Points</th>
-            </tr>
-          </thead>
-          <tbody>
+      {/* HISTORY SECTION */}
+      <div className="history-section">
+        <h2 style={{ marginBottom: '20px', fontSize: '1.5rem' }}>📜 Riwayat Analisis</h2>
+        
+        {history.length === 0 ? (
+          <p style={{ opacity: 0.6, fontStyle: 'italic' }}>Belum ada data tersimpan.</p>
+        ) : (
+          <div className="history-grid">
             {history.map((item) => (
-              <tr key={item.id}>
-                <td>{item.product_name}</td>
-                <td>{item.sentiment}</td>
-                <td>
+              <div key={item.id} className="history-item">
+                <div className="history-header">
+                  <span className="product-title">{item.product_name}</span>
+                  <span className={`sentiment-badge ${getSentimentClass(item.sentiment)}`} style={{fontSize:'0.7rem'}}>
+                    {item.sentiment}
+                  </span>
+                </div>
+                <div style={{ fontSize: '0.9rem', color: '#cbd5e0' }}>
+                  {/* BAGIAN INI SUDAH DIPERBAIKI (Hapus kode duplikat yang error) */}
                   <ul style={{ paddingLeft: '20px', margin: 0 }}>
-                    {item.key_points.slice(0, 2).map((p, i) => <li key={i}>{p}</li>)}
-                    {item.key_points.length > 2 && <li>...</li>}
+                    {/* Menampilkan maksimal 2 poin saja agar rapi */}
+                    {item.key_points && item.key_points.slice(0, 2).map((p, i) => (
+                        <li key={i}>{p}</li>
+                    ))}
+                    {/* Jika lebih dari 2 poin, tampilkan "dan lainnya" */}
+                    {item.key_points && item.key_points.length > 2 && (
+                        <li style={{listStyle: 'none', opacity: 0.7}}>...dan lainnya</li>
+                    )}
                   </ul>
-                </td>
-              </tr>
+                </div>
+              </div>
             ))}
-          </tbody>
-        </table>
-      )}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
