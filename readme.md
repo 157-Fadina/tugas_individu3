@@ -54,57 +54,41 @@ Sebelum menjalankan, pastikan Anda memiliki:
     git clone [https://github.com/username-anda/product-review-analyzer.git](https://github.com/username-anda/product-review-analyzer.git)
     cd product-review-analyzer
 
-2. Setup Database (PostgreSQL)
-    Buka terminal SQL atau pgAdmin, lalu jalankan perintah:
+### 2. Setup Database (PostgreSQL)
+    ```bash
+     Buka terminal SQL atau pgAdmin, lalu jalankan perintah:
 
     CREATE DATABASE product_review_db;
 
-3. Setup Backend
-Masuk ke folder backend dan install dependencies.
+### 3. Setup Backend
+    Masuk ke folder backend dan install dependencies.
 
-Bash
+    ```bash
+    cd backend
+    python -m venv venv
+    # Aktifkan Venv
+    # Windows:
+    venv\Scripts\activate
+    # Mac/Linux:
+    source venv/bin/activate
+    # Install Library
+    pip install pyramid pyramid_tm sqlalchemy zope.sqlalchemy psycopg2-binary requests google-generativeai python-dotenv waitress
+    Konfigurasi Environment (.env): Buat file bernama .env di dalam folder backend/. Isi dengan konfigurasi berikut:
+    # Masukkan API Key Anda (Jangan pakai tanda kutip)
+    UGGINGFACE_API_KEY=hf_xxxxxxxxxxxxxxxxxxxxxxxxxxxx
+    GEMINI_API_KEY=AIzaSyxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+    Jalankan Server Backend:
+    ```Bash
+    python main.py
+    (Server akan berjalan di http://0.0.0.0:6543)
 
-cd backend
-
-# Buat Virtual Environment
-python -m venv venv
-
-# Aktifkan Venv
-# Windows:
-venv\Scripts\activate
-# Mac/Linux:
-source venv/bin/activate
-
-# Install Library
-pip install pyramid pyramid_tm sqlalchemy zope.sqlalchemy psycopg2-binary requests google-generativeai python-dotenv waitress
-Konfigurasi Environment (.env): Buat file bernama .env di dalam folder backend/. Isi dengan konfigurasi berikut:
-
-Cuplikan kode
-
-# Ganti user, password, dan port sesuai settingan PostgreSQL Anda
-DATABASE_URL=postgresql://postgres:password_kamu@localhost:5432/product_review_db
-
-# Masukkan API Key Anda (Jangan pakai tanda kutip)
-HUGGINGFACE_API_KEY=hf_xxxxxxxxxxxxxxxxxxxxxxxxxxxx
-GEMINI_API_KEY=AIzaSyxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-Jalankan Server Backend:
-
-Bash
-
-python main.py
-(Server akan berjalan di http://0.0.0.0:6543)
-
-4. Setup Frontend
-Buka terminal baru, masuk ke folder frontend.
-
-Bash
-
-cd ../frontend
-
-# Install paket Node.js
-npm install
-
-# Jalankan Frontend
-npm run dev
-(Akses aplikasi di http://localhost:5173)
+### 4. Setup Frontend
+    Buka terminal baru, masuk ke folder frontend.
+    ```bash
+    cd ../frontend
+    # Install paket Node.js
+    npm install
+    # Jalankan Frontend
+    npm run dev
+    (Akses aplikasi di http://localhost:5173)
 
